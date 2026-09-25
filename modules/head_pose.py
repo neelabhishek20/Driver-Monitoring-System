@@ -43,7 +43,7 @@ def estimate_head_pose(face_landmarks, frame_w, frame_h):
     pitch = angles[0]
     yaw = angles[1]
 
-    # Camera calibration offsets
+    # Camera calibration
     PITCH_OFFSET = 8.5
     YAW_OFFSET = 0
 
@@ -59,13 +59,13 @@ def estimate_head_pose(face_landmarks, frame_w, frame_h):
     end_y = int(nose_y - pitch * 5)
 
     # Direction thresholds
-    if yaw < -12:
+    if yaw < -10:
         direction = "LEFT"
-    elif yaw > 12:
+    elif yaw > 10:
         direction = "RIGHT"
-    elif pitch < -12:
+    elif pitch < -10:
         direction = "DOWN"
-    elif pitch > 12:
+    elif pitch > 10:
         direction = "UP"
     else:
         direction = "FORWARD"

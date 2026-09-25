@@ -3,9 +3,7 @@ import mediapipe as mp
 import numpy as np
 
 from modules.yawn_detector import mouth_aspect_ratio, MAR_THRESHOLD
-print("RUNNING:", __file__)
-print("VERSION 3")
-print("VERSION 3 - EAR + MAR")
+from modules.head_pose import estimate_head_pose
 
 # ---------- Helper Functions ----------
 
@@ -21,7 +19,7 @@ def eye_aspect_ratio(landmarks, eye_points, w, h):
 
     return (A + B) / (2 * C)
 
-# ---------- MediaPipe ----------
+# ---------- MediaPipe Setup ----------
 
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
@@ -41,6 +39,12 @@ EAR_THRESHOLD = 0.22
 
 closed_frames = 0
 yawn_frames = 0
+
+# ---------- Head Pose Smoothing ----------
+
+prev_end_point = None
+head_direction = "FORWARD"
+head_counter = 0
 
 # ---------- Webcam ----------
 
@@ -65,6 +69,7 @@ while cap.isOpened():
 
         face = results.multi_face_landmarks[0]
 
+        # Draw Face Mesh
         mp_drawing.draw_landmarks(
             image=frame,
             landmark_list=face,
@@ -76,11 +81,10 @@ while cap.isOpened():
             )
         )
 
-        # ---------- Eye Detection ----------
+        # ---------- Eye Blink Detection ----------
 
         left_ear = eye_aspect_ratio(face.landmark, LEFT_EYE, w, h)
         right_ear = eye_aspect_ratio(face.landmark, RIGHT_EYE, w, h)
-
         ear = (left_ear + right_ear) / 2
 
         if ear < EAR_THRESHOLD:
@@ -111,7 +115,6 @@ while cap.isOpened():
         # ---------- Yawn Detection ----------
 
         mar = mouth_aspect_ratio(face.landmark, w, h)
-        print(f"MAR={mar:.2f}")
 
         if mar > MAR_THRESHOLD:
             yawn_frames += 1
@@ -146,6 +149,52 @@ while cap.isOpened():
                         1,
                         (0, 165, 255),
                         3)
+
+        # ---------- Head Pose ----------
+
+        new_direction, start_point, end_point, yaw, pitch = estimate_head_pose(face, w, h)
+
+        # Smooth blue direction line
+        if prev_end_point is None:
+            prev_end_point = end_point
+        else:
+            prev_end_point = (
+                int(0.85 * prev_end_point[0] + 0.15 * end_point[0]),
+                int(0.85 * prev_end_point[1] + 0.15 * end_point[1])
+            )
+
+        # Smooth direction text
+        if new_direction == head_direction:
+            head_counter += 1
+        else:
+            head_counter = 0
+            head_direction = new_direction
+
+        if head_counter >= 2:
+            head_direction = new_direction
+
+        cv2.putText(frame,
+                    f"Head: {head_direction}",
+                    (20, 290),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    (255, 0, 0),
+                    2)
+
+        # Debug values (for calibration)
+        cv2.putText(frame,
+                    f"Yaw:{yaw:.1f}  Pitch:{pitch:.1f}",
+                    (20, 320),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 255),
+                    2)
+
+        cv2.line(frame,
+                 start_point,
+                 prev_end_point,
+                 (255, 0, 0),
+                 3)
 
     cv2.imshow("Driver Monitoring System", frame)
 
